@@ -1,0 +1,218 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+from collections import deque, namedtuple
+import random
+from environment import AgriEnv
+import os
+
+# Define a transition tuple for experience replay
+Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
+
+class Actor(nn.Module):
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
+        super(Actor, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim),
+            nn.Tanh()
+        )
+    
+    def forward(self, state):
+        return self.net(state)
+
+class Critic(nn.Module):
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
+        super(Critic, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
+    
+    def forward(self, state, action):
+        return self.net(torch.cat([state, action], dim=1))
+
+class RLModel:
+    def __init__(self, env: AgriEnv):
+        self.env = env
+        self.state_dim = env.observation_space.shape[0]
+        self.action_dim = env.action_space.shape[0]
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Actor (Policy) Network
+        self.actor = Actor(self.state_dim, self.action_dim).to(self.device)
+        
+        # Critic (Q-value) Network
+        self.critic = Critic(self.state_dim, self.action_dim).to(self.device)
+        
+        # Target Networks
+        self.target_actor = Actor(self.state_dim, self.action_dim).to(self.device)
+        self.target_critic = Critic(self.state_dim, self.action_dim).to(self.device)
+        self._hard_update(self.target_actor, self.actor)
+        self._hard_update(self.target_critic, self.critic)
+        
+        # Optimizers
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-4)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
+        
+        # Replay Buffer
+        self.buffer = deque(maxlen=100000)
+        self.batch_size = 64
+        self.gamma = 0.99
+        self.tau = 0.005
+        self.noise_scale = 0.1
+        self.noise_decay = 0.999
+
+    def _hard_update(self, target, source):
+        for target_param, source_param in zip(target.parameters(), source.parameters()):
+            target_param.data.copy_(source_param.data)
+
+    def _soft_update(self, target, source):
+        for target_param, source_param in zip(target.parameters(), source.parameters()):
+            target_param.data.copy_(self.tau * source_param.data + (1 - self.tau) * target_param.data)
+
+    def predict(self, state, add_noise=False):
+        """Predict action for a given state."""
+        state = torch.FloatTensor(np.array(state)).to(self.device)
+        with torch.no_grad():
+            action = self.actor(state).cpu().numpy()
+        if add_noise:
+            action += self.noise_scale * np.random.randn(*action.shape)
+            self.noise_scale *= self.noise_decay
+        return np.clip(action, -1, 1)
+
+    def store_transition(self, state, action, reward, next_state, done):
+        """Store experience in replay buffer."""
+        self.buffer.append(Transition(
+            np.array(state, dtype=np.float32),
+            np.array(action, dtype=np.float32),
+            float(reward),
+            np.array(next_state, dtype=np.float32),
+            float(done)
+        ))
+
+    def train(self, total_timesteps=10000):
+        """Train the DDPG model."""
+        timesteps = 0
+        episode = 0
+        while timesteps < total_timesteps:
+            state, _ = self.env.reset()
+            episode_timesteps = 0
+            episode_reward = 0
+            
+            while True:
+                action = self.predict(state, add_noise=True)
+                scaled_action = (action + 1) * (self.env.config.total_land / 2)
+                next_state, reward, terminated, truncated, _ = self.env.step(scaled_action)
+                done = terminated or truncated
+                
+                self.store_transition(state, action, reward, next_state, done)
+                
+                if len(self.buffer) >= self.batch_size:
+                    batch = random.sample(self.buffer, self.batch_size)
+                    batch = Transition(*zip(*batch))
+                    
+                    states = torch.FloatTensor(np.stack(batch.state)).to(self.device)
+                    actions = torch.FloatTensor(np.stack(batch.action)).to(self.device)
+                    rewards = torch.FloatTensor(np.array(batch.reward)).unsqueeze(1).to(self.device)
+                    next_states = torch.FloatTensor(np.stack(batch.next_state)).to(self.device)
+                    dones = torch.FloatTensor(np.array(batch.done)).unsqueeze(1).to(self.device)
+                    
+                    # Critic update
+                    next_actions = self.target_actor(next_states)
+                    target_q = rewards + (1 - dones) * self.gamma * self.target_critic(next_states, next_actions)
+                    current_q = self.critic(states, actions)
+                    critic_loss = nn.MSELoss()(current_q, target_q.detach())
+                    
+                    self.critic_optimizer.zero_grad()
+                    critic_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
+                    self.critic_optimizer.step()
+                    
+                    # Actor update
+                    actor_loss = -self.critic(states, self.actor(states)).mean()
+                    
+                    self.actor_optimizer.zero_grad()
+                    actor_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
+                    self.actor_optimizer.step()
+                    
+                    # Soft update target networks
+                    self._soft_update(self.target_actor, self.actor)
+                    self._soft_update(self.target_critic, self.critic)
+                
+                state = next_state
+                episode_reward += reward
+                episode_timesteps += 1
+                timesteps += 1
+                
+                if done or timesteps >= total_timesteps:
+                    break
+            
+            print(f"Episode {episode+1}, Reward: {episode_reward:.1f}, Timesteps: {episode_timesteps}")
+            episode += 1
+
+    def save(self, path="data/rl_model.pth"):
+        """Save model weights."""
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+        }, path)
+
+# in rl_model.py: replace existing load(...) with:
+
+def load(self, path="data/rl_model.pth"):
+    """Load model weights. Supports multiple save formats:
+       - saved dict {'actor': actor_state_dict, 'critic': critic_state_dict}
+       - saved state_dict for actor only
+       - saved Actor module object
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Model file {path} not found")
+
+    checkpoint = torch.load(path, map_location=self.device)
+
+    # Case 1: dict with actor & critic keys (preferred)
+    if isinstance(checkpoint, dict) and 'actor' in checkpoint and 'critic' in checkpoint:
+        self.actor.load_state_dict(checkpoint['actor'])
+        self.critic.load_state_dict(checkpoint['critic'])
+        # ensure target networks match
+        self._hard_update(self.target_actor, self.actor)
+        self._hard_update(self.target_critic, self.critic)
+        return
+
+    # Case 2: checkpoint is a state_dict (likely actor state_dict)
+    if isinstance(checkpoint, dict):
+        # Try loading as actor state_dict then keep critic as-is
+        try:
+            self.actor.load_state_dict(checkpoint)
+            self._hard_update(self.target_actor, self.actor)
+            # If critic state is missing, leave critic unchanged or warn
+            print("Loaded actor state_dict only; critic state not found in file.")
+            return
+        except Exception as e:
+            # not an actor state_dict -> fall through to next case
+            print(f"Checkpoint dict not recognized as actor state_dict: {e}")
+
+    # Case 3: checkpoint is a saved module (Actor)
+    # In that case, checkpoint may be an nn.Module
+    if isinstance(checkpoint, nn.Module):
+        # We got a whole saved actor module
+        try:
+            # copy parameters from loaded module into self.actor
+            self.actor.load_state_dict(checkpoint.state_dict())
+            self._hard_update(self.target_actor, self.actor)
+            print("Loaded saved Actor module into RLModel.actor")
+            return
+        except Exception as e:
+            raise RuntimeError(f"Failed to load saved actor module: {e}")
+
+    raise RuntimeError("Unrecognized model checkpoint format when loading model.")

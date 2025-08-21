@@ -1,0 +1,81 @@
+{
+    "simulation": {
+        "years": 20,
+        "initial_savings": 20000.0,
+        "total_land": 100.0
+    },
+    "environment": {
+        "temperature": 25.0,
+        "rainfall": 1000.0
+    },
+    "crops": {
+        "wheat": {
+            "cost": {
+                "seed": 50.0,
+                "fertilizer": 100.0,
+                "pesticide": 30.0,
+                "labor": 200.0
+            },
+            "market": {
+                "price": 500.0,
+                "volatility": 0.1
+            },
+            "yield": {
+                "base": 4.5,
+                "temp_optimal": 20.0,
+                "rain_optimal": 600.0
+            }
+        },
+        "maize": {
+            "cost": {
+                "seed": 50.0,
+                "fertilizer": 100.0,
+                "pesticide": 30.0,
+                "labor": 200.0
+            },
+            "market": {
+                "price": 500.0,
+                "volatility": 0.1
+            },
+            "yield": {
+                "base": 6.0,
+                "temp_optimal": 25.0,
+                "rain_optimal": 800.0
+            }
+        },
+        "rice": {
+            "cost": {
+                "seed": 50.0,
+                "fertilizer": 100.0,
+                "pesticide": 30.0,
+                "labor": 200.0
+            },
+            "market": {
+                "price": 500.0,
+                "volatility": 0.1
+            },
+            "yield": {
+                "base": 5.0,
+                "temp_optimal": 27.0,
+                "rain_optimal": 1200.0
+            }
+        },
+        "soybeans": {
+            "cost": {
+                "seed": 50.0,
+                "fertilizer": 100.0,
+                "pesticide": 30.0,
+                "labor": 200.0
+            },
+            "market": {
+                "price": 500.0,
+                "volatility": 0.1
+            },
+            "yield": {
+                "base": 3.0,
+                "temp_optimal": 22.0,
+                "rain_optimal": 700.0
+            }
+        }
+    }
+}
