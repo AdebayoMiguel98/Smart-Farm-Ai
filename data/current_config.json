@@ -9,7 +9,7 @@
         "rainfall": 1000.0
     },
     "crops": {
-        "wheat": {
+        "Rice": {
             "cost": {
                 "seed": 50.0,
                 "fertilizer": 100.0,
@@ -22,28 +22,11 @@
             },
             "yield": {
                 "base": 4.5,
-                "temp_optimal": 20.0,
-                "rain_optimal": 600.0
-            }
-        },
-        "maize": {
-            "cost": {
-                "seed": 50.0,
-                "fertilizer": 100.0,
-                "pesticide": 30.0,
-                "labor": 200.0
-            },
-            "market": {
-                "price": 500.0,
-                "volatility": 0.1
-            },
-            "yield": {
-                "base": 6.0,
                 "temp_optimal": 25.0,
                 "rain_optimal": 800.0
             }
         },
-        "rice": {
+        "Beans": {
             "cost": {
                 "seed": 50.0,
                 "fertilizer": 100.0,
@@ -55,12 +38,12 @@
                 "volatility": 0.1
             },
             "yield": {
-                "base": 5.0,
-                "temp_optimal": 27.0,
-                "rain_optimal": 1200.0
+                "base": 4.5,
+                "temp_optimal": 25.0,
+                "rain_optimal": 800.0
             }
         },
-        "soybeans": {
+        "Maize": {
             "cost": {
                 "seed": 50.0,
                 "fertilizer": 100.0,
@@ -72,9 +55,26 @@
                 "volatility": 0.1
             },
             "yield": {
-                "base": 3.0,
-                "temp_optimal": 22.0,
-                "rain_optimal": 700.0
+                "base": 4.5,
+                "temp_optimal": 25.0,
+                "rain_optimal": 800.0
+            }
+        },
+        "Potatos": {
+            "cost": {
+                "seed": 50.0,
+                "fertilizer": 100.0,
+                "pesticide": 30.0,
+                "labor": 200.0
+            },
+            "market": {
+                "price": 500.0,
+                "volatility": 0.1
+            },
+            "yield": {
+                "base": 4.5,
+                "temp_optimal": 25.0,
+                "rain_optimal": 800.0
             }
         }
     }

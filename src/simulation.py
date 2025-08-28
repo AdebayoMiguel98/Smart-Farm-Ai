@@ -1,10 +1,11 @@
+# src/simulation.py
 import numpy as np
 import pandas as pd
 import os
 import json
 from tqdm import tqdm
 from typing import Dict, List, Any
-from src.rl_model import RLModel
+from src.rl_model import DDPGAgent  # Updated from RLModel to DDPGAgent
 from src.environment import AgriEnv
 from src.config import Config
 
@@ -12,7 +13,7 @@ class Simulation:
     def __init__(self, env: AgriEnv, config: Config):
         self.env = env
         self.config = config
-        self.model = RLModel(env)
+        self.model = DDPGAgent(env)  # Updated to use DDPGAgent
         # Validate config.years
         if not hasattr(self.config, 'years') or not isinstance(self.config.years, int) or self.config.years <= 0:
             raise ValueError(f"Invalid 'years' in config: {getattr(self.config, 'years', 'missing')}. Expected positive integer.")

@@ -4,7 +4,7 @@ from copy import deepcopy
 
 class Config:
     def __init__(self, config_file="data/default_params.json"):
-        # Default parameters with Tomato instead of Soybeans
+        # Default parameters (no static crops)
         self.params = {
             "simulation": {
                 "years": 20,
@@ -15,28 +15,7 @@ class Config:
                 "temperature": 25.0,
                 "rainfall": 1000.0
             },
-            "crops": {
-                "maize": {
-                    "cost": {"seed": 35.0, "fertilizer": 60.0, "pesticide": 25.0, "labor": 90.0},  # Total: 210
-                    "market": {"price": 450.0, "volatility": 0.15},
-                    "yield": {"base": 6.0, "temp_optimal": 25.0, "rain_optimal": 800.0}
-                },
-                "rice": {
-                    "cost": {"seed": 40.0, "fertilizer": 70.0, "pesticide": 30.0, "labor": 110.0},  # Total: 250
-                    "market": {"price": 600.0, "volatility": 0.2},
-                    "yield": {"base": 5.0, "temp_optimal": 27.0, "rain_optimal": 1200.0}
-                },
-                "tomato": {
-                    "cost": {"seed": 50.0, "fertilizer": 65.0, "pesticide": 35.0, "labor": 120.0},  # Total: 270
-                    "market": {"price": 800.0, "volatility": 0.25},
-                    "yield": {"base": 20.0, "temp_optimal": 24.0, "rain_optimal": 900.0}
-                },
-                "wheat": {
-                    "cost": {"seed": 30.0, "fertilizer": 50.0, "pesticide": 20.0, "labor": 100.0},  # Total: 200
-                    "market": {"price": 500.0, "volatility": 0.1},
-                    "yield": {"base": 4.5, "temp_optimal": 20.0, "rain_optimal": 600.0}
-                }
-            }
+            "crops": {}  # Start with empty dict for dynamic crops
         }
         if os.path.exists(config_file):
             try:

@@ -5,6 +5,7 @@ import numpy as np
 import collections
 from gymnasium.spaces import Box
 from src.environment import AgriEnv
+import random
 
 class Actor(nn.Module):
     def __init__(self, state_dim: int, action_dim: int):
@@ -16,7 +17,7 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = torch.softmax(self.layer3(x), dim=-1)
+        x = torch.softmax(self.layer3(x), dim=-1)  # Output probabilities summing to 1
         return x
 
 class Critic(nn.Module):
@@ -32,9 +33,9 @@ class Critic(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
 
-class RLModel:
+class DDPGAgent:
     def __init__(self, env: AgriEnv, actor_lr: float = 1e-4, critic_lr: float = 1e-3, 
-                 gamma: float = 0.99, tau: float = 0.005, noise_scale: float = 0.3):
+                 gamma: float = 0.99, tau: float = 0.005, noise_scale: float = 0.4):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         state_dim = env.observation_space.shape[0]
         action_dim = env.action_space.shape[0]
@@ -52,7 +53,7 @@ class RLModel:
         self.env = env
         self.gamma = gamma
         self.tau = tau
-        self.noise_scale = noise_scale
+        self.noise_scale = noise_scale  # Set to 0.4 for more exploration
     
     def predict(self, state: np.ndarray, add_noise: bool = True) -> np.ndarray:
         state = torch.FloatTensor(state).to(self.device)
@@ -63,12 +64,12 @@ class RLModel:
         if add_noise:
             noise = np.random.normal(0, self.noise_scale, size=action.shape)
             action = action + noise
-            action = np.clip(action, 0, 1)
+            action = np.clip(action, 0, 1)  # Clip to [0, 1]
             action_sum = np.sum(action)
             if action_sum < 1e-6:  # Prevent division by near-zero
                 action = np.ones_like(action) / len(action)
             else:
-                action = action / action_sum
+                action = action / action_sum  # Normalize to sum to 1
         if np.any(np.isnan(action)):
             raise ValueError(f"NaN detected in action: {action}")
         return action
@@ -78,9 +79,9 @@ class RLModel:
         
         states = torch.FloatTensor(states).to(self.device)
         actions = torch.FloatTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(rewards).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device).unsqueeze(-1)
         next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(dones).to(self.device)
+        dones = torch.FloatTensor(dones).to(self.device).unsqueeze(-1)
         
         if torch.any(torch.isnan(states)) or torch.any(torch.isnan(actions)) or torch.any(torch.isnan(rewards)):
             raise ValueError("NaN detected in batch: states, actions, or rewards")
@@ -96,7 +97,7 @@ class RLModel:
             raise ValueError(f"NaN detected in critic_loss: {critic_loss}")
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)  # Clip gradients
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_optimizer.step()
         
         # Actor update
@@ -104,9 +105,9 @@ class RLModel:
         actor_loss = -self.critic(states, predicted_actions).mean()
         if torch.isnan(actor_loss):
             raise ValueError(f"NaN detected in actor_loss: {actor_loss}")
-        self.critic_optimizer.zero_grad()
+        self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)  # Clip gradients
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
         self.actor_optimizer.step()
         
         # Update target networks
@@ -156,9 +157,7 @@ class RLModel:
     
     def train(self, total_timesteps: int = 20000, batch_size: int = 64) -> None:
         try:
-            from collections import deque
-            import random
-            replay_buffer = deque(maxlen=100000)
+            replay_buffer = collections.deque(maxlen=100000)
             rewards = []
             episode_reward = 0
             episode_timesteps = 0
@@ -172,13 +171,14 @@ class RLModel:
                 action = self.predict(state, add_noise=True)
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 
-                replay_buffer.append((state, action, reward, next_state, float(terminated or truncated)))
+                replay_buffer.append((state, action, [reward], next_state, [float(terminated or truncated)]))
                 state = next_state
                 episode_reward += reward
                 
                 if len(replay_buffer) >= batch_size:
                     batch = random.sample(replay_buffer, batch_size)
-                    batch = [np.array(x) for x in zip(*batch)]
+                    states, actions, rewards_batch, next_states, dones = zip(*batch)
+                    batch = (np.array(states), np.array(actions), np.array(rewards_batch), np.array(next_states), np.array(dones))
                     self.update(batch)
                 
                 if terminated or truncated or episode_timesteps >= max_episode_steps:
@@ -193,3 +193,5 @@ class RLModel:
             self.save()
         except Exception as e:
             raise RuntimeError(f"Training failed: {str(e)}")
+
+  # Moved to top for proper scoping

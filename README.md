@@ -14,5 +14,4 @@ agri_rl_optimizer/
 │   ├── test_environment.py  # Unit tests for environment
 ├── main.py                  # Entry point to launch Streamlit app
 ├── requirements.txt         # Dependencies pinned for Python 3.10.4
-
 ├── README.md                # Project description, setup instructions

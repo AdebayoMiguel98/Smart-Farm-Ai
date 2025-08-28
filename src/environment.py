@@ -10,6 +10,10 @@ class AgriEnv(Env):
         self.config = config
         self.num_crops = len(config.crops)
         
+        # Validate number of crops
+        if self.num_crops == 0:
+            raise ValueError("No crops defined in configuration")
+        
         # Define observation and action spaces
         self.observation_space = Box(
             low=np.array([0.0, 0.0, 0.0] + [0.0] * self.num_crops),
